@@ -1,0 +1,21 @@
+[package]
+name = "mpmc-scheduler"
+version = "0.1.0"
+authors = ["Aron Heinecke <aron.heinecke@t-online.de>"]
+edition = "2018"
+
+readme = "README.md"
+license = "MIT/Apache-2.0"
+
+description = "multi-mpmc, cancellable, scheduler with rate limiting"
+keywords = ["queue", "tokio","mpsc", "mpmc", "bounded", "scheduler"]
+
+[dependencies]
+futures = "0.1"
+tokio = "0.1"
+npnc = "0.2"
+bus = "2.0"
+
+
+[dev-dependencies]
+tokio = "0.1"
