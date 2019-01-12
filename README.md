@@ -9,8 +9,9 @@ It bundles together multiple mpmc channels and schedules incoming work with fair
 ```rust
 use mpmc_scheduler;
 use tokio::runtime::Runtime;
+use futures::future::Future;
 
-let (controller, scheduler) = Scheduler::new(
+let (controller, scheduler) = mpmc_scheduler::Scheduler::new(
     4,
     |v| {
         println!("Processing {}", v);
@@ -20,7 +21,7 @@ let (controller, scheduler) = Scheduler::new(
     true
 );
 
-let mut runtime = Runtime::new();
+let mut runtime = Runtime::new().unwrap();
 
 let tx = controller.channel(1,4);
 
