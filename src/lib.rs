@@ -63,7 +63,7 @@
 //! ## Limitations
 //! - mpmc-scheduler can only be used with its own Producer channels due to missing traits for other channels. futures mpsc also doesn't work as they are not waking up the scheduler.
 //!
-//! - The channel bound has to be a power of two.
+//! - The channel bound has to be a power of two!
 //!
 //! - You can only define one work-handler function per `Scheduler` and it cannot be changed afterwards.
 //!
@@ -306,8 +306,11 @@ where
     FR: Fn(R) + Send + Sync + 'static,
 {
     /// Create a new channel, returns the producer site.
-    /// The channel bound has to be a power of 2 !
+    /// See below for bound.
     /// May block if clearing or scheduling tick is currently running.
+    ///
+    /// ## Panics
+    /// The channel bound has to be a power of 2 ! Otherwise this panics.
     pub fn channel(&self, key: K, bound: usize) -> Sender<V> {
         self.inner.create_channel(key, bound)
     }
