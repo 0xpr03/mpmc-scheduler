@@ -275,7 +275,8 @@ where
         *task_l = Some(task::current());
         drop(task_l);
         self.position.store(pos, Ordering::Relaxed);
-        if self.exit_on_idle && map_l.len() == 0 {
+        if self.exit_on_idle && map_l.len() == 0 && self.workers_active.load(Ordering::Relaxed) == 0
+        {
             Ok(Async::Ready(()))
         } else {
             Ok(Async::NotReady)
@@ -387,5 +388,79 @@ where
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         self.inner.poll()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Scheduler;
+    use super::*;
+    use std::thread;
+    use std::time::Duration;
+    use tokio::runtime::Runtime;
+
+    fn run_spmc(amount: usize, workers: usize, channel_size: usize) {
+        let collector = Arc::new(Mutex::new(Vec::new()));
+        let collectorc = collector.clone();
+        let (controller, scheduler) = Scheduler::new(
+            workers,
+            |v| {
+                //println!("Seen {}", v);
+                v
+            },
+            Some(move |v| {
+                let mut lock = collectorc.lock().unwrap();
+                lock.push(v);
+            }),
+            true,
+        );
+        let mut runtime = Runtime::new().unwrap();
+        let tx = controller.channel(1, channel_size);
+        runtime.spawn(scheduler);
+        thread::spawn(move || {
+            for i in 0..amount {
+                loop {
+                    if tx.try_send(i).is_ok() {
+                        break;
+                    }
+                    thread::sleep(Duration::from_micros(10))
+                }
+            }
+            drop(tx);
+        });
+        runtime.shutdown_on_idle().wait().unwrap();
+
+        let lock = collector.lock().unwrap();
+        assert_eq!(amount, lock.len());
+        for i in 0..amount {
+            assert!(lock.contains(&i));
+        }
+    }
+
+    #[test]
+    fn verify_spsw() {
+        run_spmc(10_000, 1, 32);
+        run_spmc(10_000, 1, 16384);
+    }
+
+    #[test]
+    fn verify_spmw_overload() {
+        for i in 2..30 {
+            run_spmc(10_000, i, 2);
+        }
+    }
+
+    #[test]
+    fn verify_spmw() {
+        for i in 2..30 {
+            run_spmc(10_000, i, 1024);
+        }
+    }
+
+    #[test]
+    fn verify_spmw_underload() {
+        for i in 2..30 {
+            run_spmc(30, i, 1024);
+        }
     }
 }
