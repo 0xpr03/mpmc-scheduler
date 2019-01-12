@@ -12,7 +12,6 @@ keywords = ["queue", "tokio","mpsc", "mpmc", "bounded", "scheduler"]
 
 [dependencies]
 futures = "0.1"
-tokio = "0.1"
 npnc = "0.2"
 bus = "2.0"
 
