@@ -403,13 +403,14 @@ where
 
 #[cfg(test)]
 mod tests {
+
     use super::Scheduler;
     use super::*;
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
     use tokio::runtime::Runtime;
 
-    fn run_spmc(amount: usize, workers: usize, channel_size: usize) {
+    fn run_mpmc(producers: usize, amount: usize, workers: usize, channel_size: usize) {
         let collector = Arc::new(Mutex::new(Vec::new()));
         let collectorc = collector.clone();
         let (controller, scheduler) = Scheduler::new(
@@ -427,20 +428,35 @@ mod tests {
         let mut runtime = Runtime::new().unwrap();
         let tx = controller.channel(1, channel_size);
         runtime.spawn(scheduler);
-        thread::spawn(move || {
-            for i in 0..amount {
-                loop {
-                    if tx.try_send(i).is_ok() {
-                        break;
-                    }
-                    thread::sleep(Duration::from_micros(10))
-                }
+        for t in 0..producers {
+            let txc = controller.channel(t, channel_size);
+            let start = t * (amount / producers);
+            let mut end = start + (amount / producers);
+            if t == producers - 1 {
+                end = amount;
             }
-            drop(tx);
-        });
+            println!("start: {} end {}", start, end);
+            thread::spawn(move || {
+                for i in start..end {
+                    loop {
+                        if txc.try_send(i).is_ok() {
+                            break;
+                        }
+                        thread::sleep(Duration::from_micros(10))
+                    }
+                }
+                drop(txc);
+                println!("{} finished insertion", t);
+            });
+        }
+        drop(tx);
         runtime.shutdown_on_idle().wait().unwrap();
 
         let lock = collector.lock().unwrap();
+        println!(
+            "Verifying for {} inserter {} workers {} amount",
+            producers, workers, amount
+        );
         assert_eq!(amount, lock.len());
         for i in 0..amount {
             assert!(lock.contains(&i));
@@ -448,29 +464,88 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
+    fn bench_mpsw() {
+        let producers = 8;
+        let amount = 1_000_000;
+        let workers = 8;
+        let channel_size = 1024;
+        let (controller, scheduler) = Scheduler::new(
+            workers,
+            |v| {
+                //println!("Seen {}", v);
+                v
+            },
+            Some(move |v| {
+                //assert!(v >= 0);
+            }),
+            true,
+        );
+        let mut runtime = Runtime::new().unwrap();
+        let tx = controller.channel(1, channel_size);
+        runtime.spawn(scheduler);
+        let start = Instant::now();
+        for t in 0..producers {
+            let txc = controller.channel(t, channel_size);
+            let start = t * (amount / producers);
+            let mut end = start + (amount / producers);
+            if t == producers - 1 {
+                end = amount;
+            }
+            println!("start: {} end {}", start, end);
+            thread::spawn(move || {
+                for i in start..end {
+                    loop {
+                        if txc.try_send(i).is_ok() {
+                            break;
+                        }
+                        thread::sleep(Duration::from_nanos(1));
+                    }
+                }
+                drop(txc);
+                println!("{} finished insertion", t);
+            });
+        }
+        drop(tx);
+        runtime.shutdown_on_idle().wait().unwrap();
+        let end_d = start.elapsed();
+        let end = end_d.subsec_millis() as u64 + (end_d.as_secs() * 1_000);
+        println!(
+            "Took {} ms for {} entries: {}ms per job",
+            end,
+            amount,
+            amount / end
+        );
+    }
+
+    #[test]
+    fn verify_mpsw() {
+        run_mpmc(8, 10_000, 4, 32);
+    }
+
+    #[test]
     fn verify_spsw() {
-        run_spmc(10_000, 1, 32);
-        run_spmc(10_000, 1, 16384);
+        run_mpmc(1, 1_000, 1, 32);
     }
 
     #[test]
     fn verify_spmw_overload() {
         for i in 2..30 {
-            run_spmc(10_000, i, 2);
+            run_mpmc(1, 1_000, i, 2);
         }
     }
 
     #[test]
     fn verify_spmw() {
         for i in 2..30 {
-            run_spmc(10_000, i, 1024);
+            run_mpmc(1, 1_000, i, 1024);
         }
     }
 
     #[test]
     fn verify_spmw_underload() {
         for i in 2..30 {
-            run_spmc(30, i, 1024);
+            run_mpmc(1, 30, i, 1024);
         }
     }
 }
