@@ -60,6 +60,12 @@
 //! Closed channels are detected and removed from the scheduler when iterating.
 //! You can manually trigger a schedule tick by calling `gc` on the controller.
 //!
+//! ## Performance
+//!
+//! Arcane Magic benchmarks result in 56ms/job on a i7-6700HQ with 1 million jobs, 8 parallel producing channels & 8 Workers, 1024 bound per channel.
+//! Note that at most two roundtrips per schedule interval are done (so at most 16 jobs scheduled per interval).
+//! This means that above numbers include iteration & polling start-stop fees.
+//!
 //! ## Limitations
 //! - mpmc-scheduler can only be used with its own Producer channels due to missing traits for other channels. futures mpsc also doesn't work as they are not waking up the scheduler.
 //!
