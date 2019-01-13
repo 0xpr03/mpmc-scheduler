@@ -105,6 +105,8 @@ pub struct Sender<V> {
 
 unsafe impl<V> Send for Sender<V> where V: Send {}
 
+unsafe impl<V> Sync for Sender<V> {}
+
 impl<V> Sender<V> {
     /// Try sending a new job
     /// Doesn't block in best-normal case, but can block for a guaranteed short amount.
