@@ -315,10 +315,10 @@ where
     /// See below for bound.
     /// May block if clearing or scheduling tick is currently running.
     ///
-    /// ## Panics
-    /// The channel bound has to be a power of 2 ! Otherwise this panics.
+    /// ## Bound
+    /// Is the next power of two for the handed value
     pub fn channel(&self, key: K, bound: usize) -> Sender<V> {
-        self.inner.create_channel(key, bound)
+        self.inner.create_channel(key, bound.next_power_of_two())
     }
 
     /// Clear queue for specific channel & running jobs if supported.
