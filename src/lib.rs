@@ -340,6 +340,7 @@ where
 
 // no clone, don't allow for things such as 2x spawn()
 /// Scheduler
+#[must_use = "schedulers do nothing unless polled"]
 pub struct Scheduler<K, V, R>
 where
     K: Sync + Send + Hash + Eq,
