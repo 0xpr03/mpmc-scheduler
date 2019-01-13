@@ -126,12 +126,11 @@ impl<V> Sender<V> {
 
 /// Inner scheduler, shared accross controller & worker
 #[doc(hidden)]
-struct SchedulerInner<K, V, FB, FR, R>
+struct SchedulerInner<K, V, R>
 where
     K: Sync + Send + Hash + Eq,
     V: Send + Sync + 'static,
-    FB: Fn(V) -> R + Send + Sync + 'static,
-    FR: Fn(R) + Send + Sync + 'static,
+    R: 'static,
 {
     position: AtomicUsize,
     // TODO: evaluate concurrent_hashmap
@@ -139,8 +138,8 @@ where
     task: TaskStore,
     workers_active: Arc<AtomicUsize>,
     max_worker: usize,
-    worker_fn: Arc<FB>,
-    worker_fn_finalize: Arc<Option<FR>>,
+    worker_fn: Arc<Box<dyn Fn(V) -> R + Send + Sync + 'static>>,
+    worker_fn_finalize: Arc<Option<Box<dyn Fn(R) + Send + Sync + 'static>>>,
     exit_on_idle: bool,
 }
 
@@ -152,19 +151,18 @@ struct Channel<V> {
     cancel_bus: Bus<()>,
 }
 
-impl<K, V, FB, FR, R> SchedulerInner<K, V, FB, FR, R>
+impl<K, V, R> SchedulerInner<K, V, R>
 where
     K: Sync + Send + Hash + Eq,
     V: Sync + Send + 'static,
-    FB: Fn(V) -> R + Send + Sync + 'static,
-    FR: Fn(R) + Send + Sync + 'static,
+    R: 'static,
 {
     pub fn new(
         max_worker: usize,
-        worker_fn: FB,
-        worker_fn_finalize: Option<FR>,
+        worker_fn: Box<dyn Fn(V) -> R + Send + Sync + 'static>,
+        worker_fn_finalize: Option<Box<dyn Fn(R) + Send + Sync + 'static>>,
         exit_on_idle: bool,
-    ) -> SchedulerInner<K, V, FB, FR, R> {
+    ) -> SchedulerInner<K, V, R> {
         SchedulerInner {
             position: AtomicUsize::new(0),
             channels: Arc::new(Mutex::new(HashMap::new())),
@@ -172,7 +170,9 @@ where
             max_worker,
             task: Arc::new(RwLock::new(None)),
             worker_fn: Arc::new(worker_fn),
-            worker_fn_finalize: Arc::new(worker_fn_finalize),
+            worker_fn_finalize: Arc::new(
+                worker_fn_finalize as Option<Box<dyn Fn(R) + Send + Sync + 'static>>,
+            ),
             exit_on_idle,
         }
     }
@@ -296,22 +296,20 @@ where
 /// The Controller is a non-producing handle to the scheduler.
 /// It allows creation of new channels as well as clearing of queues.
 #[derive(Clone)]
-pub struct Controller<K, V, FB, FR, R>
+pub struct Controller<K, V, R>
 where
     K: Sync + Send + Hash + Eq,
     V: Sync + Send + 'static,
-    FB: Fn(V) -> R + Send + Sync + 'static,
-    FR: Fn(R) + Send + Sync + 'static,
+    R: 'static,
 {
-    inner: Arc<SchedulerInner<K, V, FB, FR, R>>,
+    inner: Arc<SchedulerInner<K, V, R>>,
 }
 
-impl<K, V, FB, FR, R> Controller<K, V, FB, FR, R>
+impl<K, V, R> Controller<K, V, R>
 where
     K: Sync + Send + Hash + Eq,
     V: Sync + Send + 'static,
-    FB: Fn(V) -> R + Send + Sync + 'static,
-    FR: Fn(R) + Send + Sync + 'static,
+    R: 'static,
 {
     /// Create a new channel, returns the producer site.
     /// See below for bound.
@@ -342,22 +340,20 @@ where
 
 // no clone, don't allow for things such as 2x spawn()
 /// Scheduler
-pub struct Scheduler<K, V, FB, FR, R>
+pub struct Scheduler<K, V, R>
 where
     K: Sync + Send + Hash + Eq,
     V: Sync + Send + 'static,
-    FB: Fn(V) -> R + Send + Sync + 'static,
-    FR: Fn(R) + Send + Sync + 'static,
+    R: 'static,
 {
-    inner: Arc<SchedulerInner<K, V, FB, FR, R>>,
+    inner: Arc<SchedulerInner<K, V, R>>,
 }
 
-impl<K, V, FB, FR, R> Scheduler<K, V, FB, FR, R>
+impl<K, V, R> Scheduler<K, V, R>
 where
     K: Sync + Send + Hash + Eq,
     V: Sync + Send + 'static,
-    FB: Fn(V) -> R + Send + Sync + 'static,
-    FR: Fn(R) + Send + Sync + 'static,
+    R: 'static,
 {
     /// Create a new scheduler with specified amount of max workers.
     /// max_worker: specifies the amount of workers to be used
@@ -368,14 +364,14 @@ where
     /// You should create at least one channel before spawning the scheduler on the runtime when set to true.
     pub fn new(
         max_worker: usize,
-        worker_fn: FB,
-        worker_fn_finalize: Option<FR>,
+        worker_fn: impl Fn(V) -> R + Send + Sync + 'static,
+        worker_fn_finalize: Option<impl Fn(R) + Send + Sync + 'static>,
         finish_on_idle: bool,
-    ) -> (Controller<K, V, FB, FR, R>, Scheduler<K, V, FB, FR, R>) {
+    ) -> (Controller<K, V, R>, Scheduler<K, V, R>) {
         let inner = Arc::new(SchedulerInner::new(
             max_worker,
-            worker_fn,
-            worker_fn_finalize,
+            Box::new(worker_fn) as Box<dyn Fn(V) -> R + Send + Sync + 'static>,
+            worker_fn_finalize.map(|v| Box::new(v) as Box<dyn Fn(R) + Send + Sync + 'static>),
             finish_on_idle,
         ));
         (
@@ -387,12 +383,11 @@ where
     }
 }
 
-impl<K, V, FB, FR, R> Future for Scheduler<K, V, FB, FR, R>
+impl<K, V, R> Future for Scheduler<K, V, R>
 where
     K: Sync + Send + Hash + Eq,
     V: Sync + Send + 'static,
-    FB: Fn(V) -> R + Send + Sync + 'static,
-    FR: Fn(R) + Send + Sync + 'static,
+    R: 'static,
 {
     // The stream will never yield an error
     type Error = FutError;
