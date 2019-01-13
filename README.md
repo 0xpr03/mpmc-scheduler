@@ -67,6 +67,9 @@ You can manually trigger a schedule tick by calling `gc` on the controller.
 
 - You can only define one work-handler function per `Scheduler` and it cannot be changed afterwards.
 
+## Thanks
+
+Thanks to udoprog for the help with reducing the amount of generics & making it possible to store Controller & Scheduler in a non-generic way.
 
 ## License
 
