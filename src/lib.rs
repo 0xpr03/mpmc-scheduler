@@ -620,4 +620,59 @@ mod tests {
         drop(tx);
         runtime.shutdown_on_idle().wait().unwrap();
     }
+
+    #[test]
+    fn verify_sync_sender() {
+        let workers = 2;
+        let producers = 4;
+        let amount = 1_000;
+        let channel_size = 32;
+        let collector = Arc::new(Mutex::new(Vec::new()));
+        let collectorc = collector.clone();
+        let (controller, scheduler) = Scheduler::new(
+            workers,
+            |v| v,
+            Some(move |v| {
+                let mut lock = collectorc.lock().unwrap();
+                lock.push(v);
+            }),
+            true,
+        );
+        let mut runtime = Runtime::new().unwrap();
+        let tx = controller.channel(1, channel_size);
+        runtime.spawn(scheduler);
+        for t in 0..producers {
+            let txc = controller.channel(t, channel_size);
+            let start = t * (amount / producers);
+            let mut end = start + (amount / producers);
+            if t == producers - 1 {
+                end = amount;
+            }
+            println!("start: {} end {}", start, end);
+            thread::spawn(move || {
+                for i in start..end {
+                    loop {
+                        if txc.try_send(i).is_ok() {
+                            break;
+                        }
+                        thread::sleep(Duration::from_micros(10))
+                    }
+                }
+                drop(txc);
+                println!("{} finished insertion", t);
+            });
+        }
+        drop(tx);
+        runtime.shutdown_on_idle().wait().unwrap();
+
+        let lock = collector.lock().unwrap();
+        println!(
+            "Verifying for {} inserter {} workers {} amount",
+            producers, workers, amount
+        );
+        assert_eq!(amount, lock.len());
+        for i in 0..amount {
+            assert!(lock.contains(&i));
+        }
+    }
 }
