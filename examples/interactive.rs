@@ -39,6 +39,7 @@ fn main() {
     let controllerc = controller.clone();
     thread::spawn(move || {
         // create some jobs
+        #[allow(unused_must_use)]
         for i in 0..100 {
             println!("Inserting {}", i);
             tx_1c.try_send(format!("Msg1A{}", i));
@@ -55,6 +56,7 @@ fn main() {
             // new scope, we drop tx_3 (and thus that channel) afterwards
             let tx_3 = controllerc.channel(3, 8);
 
+            #[allow(unused_must_use)]
             for i in 0..100 {
                 println!("Inserting {}", i);
                 tx_3.try_send(format!("Msg3A{}", i));
