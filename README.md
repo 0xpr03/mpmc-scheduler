@@ -1,5 +1,8 @@
 # mpmc-scheduler
 
+[![crates.io](https://img.shields.io/crates/v/mpmc-scheduler.svg)](https://crates.io/crates/mpmc-scheduler)
+[![docs.rs](https://docs.rs/mpmc-scheduler/badge.svg)](https://docs.rs/mpmc-scheduler)
+
 A Fair, Per-Channel Cancellable, multi-mpmc task scheduler running on top of tokio.
 
 It bundles together multiple mpmc channels and schedules incoming work with fair rate limiting among the allowed maximum of workers.
