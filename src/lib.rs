@@ -98,10 +98,18 @@ macro_rules! lock_c {
 }
 
 /// Sender/Producer for one channel
-#[derive(Clone)]
 pub struct Sender<V> {
     queue: Arc<mpmc::Producer<V>>,
     task: TaskStore,
+}
+
+impl<V> Clone for Sender<V> {
+    fn clone(&self) -> Self {
+        Sender {
+            queue: self.queue.clone(),
+            task: self.task.clone(),
+        }
+    }
 }
 
 unsafe impl<V> Send for Sender<V> where V: Send {}
@@ -546,5 +554,70 @@ mod tests {
         for i in 2..30 {
             run_mpmc(1, 30, i, 1024);
         }
+    }
+
+    #[allow(dead_code)]
+    struct TestNonClonable {
+        // just disallow clone by this in any way
+        a: Option<Mutex<()>>,
+    }
+
+    impl TestNonClonable {
+        pub fn new() -> TestNonClonable {
+            TestNonClonable { a: None }
+        }
+    }
+
+    #[test]
+    fn verify_non_clone() {
+        let workers = 2;
+        let producers = 2;
+        let amount = 100;
+        let channel_size = 32;
+        let collector = Arc::new(Mutex::new(Vec::new()));
+        let collectorc = collector.clone();
+        let (controller, scheduler) = Scheduler::new(
+            workers,
+            |v| {
+                //println!("Seen {}", v);
+                v
+            },
+            Some(move |v| {
+                let mut lock = collectorc.lock().unwrap();
+                lock.push(v);
+            }),
+            true,
+        );
+        let mut runtime = Runtime::new().unwrap();
+        let tx = controller.channel(1, channel_size);
+
+        // clone here, so Producer requires clone
+        let _ = tx.clone();
+
+        // normally insert stuff, but our V is non-clone
+        runtime.spawn(scheduler);
+        for t in 0..producers {
+            let txc = controller.channel(t, channel_size);
+            let start = t * (amount / producers);
+            let mut end = start + (amount / producers);
+            if t == producers - 1 {
+                end = amount;
+            }
+            println!("start: {} end {}", start, end);
+            thread::spawn(move || {
+                for i in start..end {
+                    loop {
+                        if txc.try_send(TestNonClonable::new()).is_ok() {
+                            break;
+                        }
+                        thread::sleep(Duration::from_micros(10))
+                    }
+                }
+                drop(txc);
+                println!("{} finished insertion", t);
+            });
+        }
+        drop(tx);
+        runtime.shutdown_on_idle().wait().unwrap();
     }
 }
