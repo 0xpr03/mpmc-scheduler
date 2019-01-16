@@ -366,7 +366,7 @@ where
     R: 'static,
 {
     /// Create a new scheduler with specified amount of max workers.
-    /// max_worker: specifies the amount of workers to be used
+    /// * `max_worker` - specifies the amount of workers to be used
     /// * `worker_fn` - the function to execute that handles the "main" work, not stopped when running
     /// * `worker_fn_finialize` - the "finish" function which is not called on job cancel
     /// * `finish_on_idle` - on true if no channels are left on the next schedule the scheduler will drop from the tokio Runtime
