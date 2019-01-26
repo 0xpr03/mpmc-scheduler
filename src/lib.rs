@@ -63,7 +63,8 @@
 //!
 //! ## Performance
 //!
-//! Arcane Magic benchmarks result in 56ms/job on a i7-6700HQ with 1 million jobs, 8 parallel producing channels & 8 Workers, 1024 bound per channel.
+//! If you have idle workers it takes ~ 1ms or less to process a job. Depending on your worker/producer ratio your mileage may vary.
+//! For example with Arcane Magic benchmarks it results in 56ms/job on a i7-6700HQ with 1 million jobs, 8 parallel producing channels & 8 Workers, 1024 bound per channel.
 //! Note that at most two roundtrips per schedule interval are done (so at most 16 jobs scheduled per interval) and we constantly have to re-send.
 //! This means that above numbers include iteration & polling start-stop fees.
 //!
