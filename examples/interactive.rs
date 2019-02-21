@@ -7,6 +7,9 @@ use mpmc_scheduler::Scheduler;
 use std::thread;
 use std::time::Duration;
 
+/// Demonstrates an scheduler with multiple inserters and the ability to
+/// interactively queue, cancel & stop the scheduler.
+
 fn main() {
     println!("Hello, world!");
     let delay = 1;

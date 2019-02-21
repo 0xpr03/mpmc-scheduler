@@ -76,7 +76,7 @@ This means that above numbers include iteration & polling start-stop fees.
 
 - The channel bound has to be a power of two. 
 
-- You can only define one work-handler function per `Scheduler` and it cannot be changed afterwards.
+- You can only define one work-handler function per `Scheduler` and it cannot be changed afterwards. You can work around this by passing along a `Box<dyn Fn>` containing your dynamic function to be dispatched. See dynamic_dispatch example.
 
 ## Thanks
 
