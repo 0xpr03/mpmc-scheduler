@@ -1,6 +1,6 @@
 [package]
 name = "mpmc-scheduler"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Aron Heinecke <aron.heinecke@t-online.de>"]
 edition = "2018"
 
