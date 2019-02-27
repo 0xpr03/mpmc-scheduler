@@ -357,13 +357,13 @@ where
         self.inner.schedule();
     }
 
-    /// Change maximum amount of workers
-    /// Takes effect on next schedule
+    /// Change maximum amount of workers.  
+    /// Takes effect on next schedule.
     pub fn set_worker_max(&self, max_workers: usize) {
         self.inner.set_workers_max(max_workers);
     }
 
-    /// Returns currently set max amount of workers
+    /// Returns currently set max amount of workers.
     pub fn get_worker_max(&self) -> usize {
         self.inner.get_workers_max()
     }
