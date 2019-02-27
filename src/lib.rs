@@ -144,7 +144,7 @@ where
 {
     position: AtomicUsize,
     // TODO: evaluate concurrent_hashmap
-    channels: Arc<Mutex<HashMap<K, Channel<V>>>>,
+    channels: Mutex<HashMap<K, Channel<V>>>,
     task: TaskStore,
     workers_active: Arc<AtomicUsize>,
     max_worker: AtomicUsize,
@@ -175,7 +175,7 @@ where
     ) -> SchedulerInner<K, V, R> {
         SchedulerInner {
             position: AtomicUsize::new(0),
-            channels: Arc::new(Mutex::new(HashMap::new())),
+            channels: Mutex::new(HashMap::new()),
             workers_active: Arc::new(AtomicUsize::new(0)),
             max_worker: AtomicUsize::new(max_worker),
             task: Arc::new(RwLock::new(None)),
