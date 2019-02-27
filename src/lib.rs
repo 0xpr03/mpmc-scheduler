@@ -147,7 +147,7 @@ where
     channels: Arc<Mutex<HashMap<K, Channel<V>>>>,
     task: TaskStore,
     workers_active: Arc<AtomicUsize>,
-    max_worker: usize,
+    max_worker: AtomicUsize,
     worker_fn: Arc<Box<dyn Fn(V) -> R + Send + Sync + 'static>>,
     worker_fn_finalize: Arc<Option<Box<dyn Fn(R) + Send + Sync + 'static>>>,
     exit_on_idle: bool,
@@ -177,7 +177,7 @@ where
             position: AtomicUsize::new(0),
             channels: Arc::new(Mutex::new(HashMap::new())),
             workers_active: Arc::new(AtomicUsize::new(0)),
-            max_worker,
+            max_worker: AtomicUsize::new(max_worker),
             task: Arc::new(RwLock::new(None)),
             worker_fn: Arc::new(worker_fn),
             worker_fn_finalize: Arc::new(
@@ -214,6 +214,14 @@ where
         }
     }
 
+    pub fn set_workers_max(&self, max: usize) {
+        self.max_worker.store(max, Ordering::Relaxed);
+    }
+
+    pub fn get_workers_max(&self) -> usize {
+        self.max_worker.load(Ordering::Relaxed)
+    }
+
     /// Create channel
     pub fn create_channel(&self, key: K, bound: usize) -> Sender<V> {
         let mut map_l = lock_c!(self.channels);
@@ -247,7 +255,9 @@ where
         let mut no_work = true;
         let mut idle = false;
 
-        while self.workers_active.load(Ordering::Relaxed) < self.max_worker && !idle {
+        while self.workers_active.load(Ordering::Relaxed) < self.max_worker.load(Ordering::Relaxed)
+            && !idle
+        {
             map_l.retain(|_, channel| {
                 // skip to position from last poll
                 if roundtrip == 0 && pos < start_pos {
@@ -345,6 +355,17 @@ where
     /// don't insert/complete a job in the next time, you may call this.
     pub fn gc(&self) {
         self.inner.schedule();
+    }
+
+    /// Change maximum amount of workers
+    /// Takes effect on next schedule
+    pub fn set_worker_max(&self, max_workers: usize) {
+        self.inner.set_workers_max(max_workers);
+    }
+
+    /// Returns currently set max amount of workers
+    pub fn get_worker_max(&self) -> usize {
+        self.inner.get_workers_max()
     }
 }
 
