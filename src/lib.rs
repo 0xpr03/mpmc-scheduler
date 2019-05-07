@@ -102,6 +102,7 @@ macro_rules! lock_c {
 pub struct Sender<V> {
     queue: Arc<mpmc::Producer<V>>,
     task: TaskStore,
+    len: Arc<AtomicUsize>,
 }
 
 impl<V> Clone for Sender<V> {
@@ -109,6 +110,7 @@ impl<V> Clone for Sender<V> {
         Sender {
             queue: self.queue.clone(),
             task: self.task.clone(),
+            len: self.len.clone(),
         }
     }
 }
@@ -124,13 +126,20 @@ impl<V> Sender<V> {
         match self.queue.produce(value) {
             Err(ProduceError::Disconnected(v)) => return Err(TrySendError::Disconnected(v)),
             Err(ProduceError::Full(v)) => return Err(TrySendError::Full(v)),
-            _ => (),
+            Ok(_) => {
+                self.len.fetch_add(1, Ordering::SeqCst);
+            }
         }
         let task_l = self.task.read().expect("Can't lock task!");
         if let Some(task) = task_l.as_ref() {
             task.notify();
         }
         Ok(())
+    }
+
+    /// Returns amount of elements currently in queue
+    pub fn len(&self) -> usize {
+        return self.len.load(Ordering::Relaxed);
     }
 }
 
@@ -159,6 +168,7 @@ where
 struct Channel<V> {
     recv: mpmc::Consumer<V>,
     cancel_bus: Bus<()>,
+    len: Arc<AtomicUsize>,
 }
 
 impl<K, V, R> SchedulerInner<K, V, R>
@@ -227,16 +237,19 @@ where
         let mut map_l = lock_c!(self.channels);
 
         let (tx, rx) = mpmc::channel(bound);
+        let len = Arc::new(AtomicUsize::new(0));
         map_l.insert(
             key,
             Channel {
                 recv: rx,
                 cancel_bus: Bus::new(1),
+                len: len.clone(),
             },
         );
         Sender {
             queue: Arc::new(tx),
             task: self.task.clone(),
+            len,
         }
     }
 
@@ -266,6 +279,7 @@ where
                 let mut connected = true;
                 match channel.recv.consume() {
                     Ok(w) => {
+                        channel.len.fetch_sub(1, Ordering::SeqCst);
                         no_work = false;
                         self.workers_active.fetch_add(1, Ordering::SeqCst);
                         worker_counter += 1;
@@ -696,5 +710,40 @@ mod tests {
         for i in 0..amount {
             assert!(lock.contains(&i));
         }
+    }
+
+    #[test]
+    fn verify_length() {
+        let exit = Arc::new(AtomicUsize::new(0));
+        let exit_c = exit.clone();
+        const LIMIT: isize = 1000;
+        let (controller, scheduler) = Scheduler::new(
+            1,
+            |v| v,
+            Some(move |v| {
+                println!("{}", v);
+                if v == LIMIT {
+                    println!("Killing..");
+                    exit_c.fetch_add(1, Ordering::SeqCst);
+                }
+            }),
+            true,
+        );
+        let tx = controller.channel(1, 1024);
+        assert_eq!(0, tx.len());
+        tx.try_send(1).unwrap();
+        assert_eq!(1, tx.len());
+
+        let mut runtime = Runtime::new().unwrap();
+        runtime.spawn(scheduler);
+
+        for i in 0..=LIMIT {
+            tx.try_send(i).unwrap();
+        }
+        while exit.load(Ordering::Relaxed) == 0 {
+            thread::sleep(Duration::from_millis(15));
+        }
+        assert_eq!(0, tx.len());
+        drop(tx);
     }
 }
