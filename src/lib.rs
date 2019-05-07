@@ -84,7 +84,7 @@ use npnc::{ConsumeError, ProduceError};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::TrySendError;
+pub use std::sync::mpsc::TrySendError;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
