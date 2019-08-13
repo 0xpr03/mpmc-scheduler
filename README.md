@@ -2,6 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/mpmc-scheduler.svg)](https://crates.io/crates/mpmc-scheduler)
 [![docs.rs](https://docs.rs/mpmc-scheduler/badge.svg)](https://docs.rs/mpmc-scheduler)
+[![Build Status](https://travis-ci.com/0xpr03/mpmc-scheduler.svg?branch=master)](https://travis-ci.com/0xpr03/mpmc-scheduler)
 
 A Fair, Per-Channel Cancellable, multi-mpmc task scheduler running on top of tokio.
 
