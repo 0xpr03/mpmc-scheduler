@@ -1,0 +1,13 @@
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+  include:
+  fast_finish: true
+# Need to cache the whole `.cargo` directory to keep .crates.toml for
+# cargo-update to work
+cache: cargo
